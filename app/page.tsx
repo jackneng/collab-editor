@@ -14,7 +14,10 @@ export default function Home() {
     const socket = socketRef.current;
     if (socket) {
       socket.send(
-        JSON.stringify(value)
+        JSON.stringify({
+          type: "update",
+          content: value
+        })
       );
     }
   }
@@ -25,7 +28,19 @@ export default function Home() {
 
     socket.onopen = () => {
       setStatus("Connected");
+
+      socket.send(
+        JSON.stringify({
+          type: "join"
+        })
+      );
     };
+
+    socket.onmessage = (event) => {
+      console.log(event);
+      const message = event.data;
+      setContent(message);
+    }
 
     socket.onclose = () => setStatus("Disconnected");
     socket.onerror = () => setStatus("Connection error");
