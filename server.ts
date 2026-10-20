@@ -1,30 +1,48 @@
-import { WebSocketServer } from "ws";
+import { WebSocketServer, WebSocket } from "ws";
 
 let content = "";
-
+let revision = 0;
 
 const wss = new WebSocketServer({ port: 3001 });
 
-function broadcast(message: string) {
+function send(ws: WebSocket, message: object) {
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(message));
+    }
+}
+
+function broadcast(message: object) {
     for (const client of wss.clients) {
-        client.send(message);
+        send(client, message);
     }
 }
 
 wss.on("connection", (socket) => {
     socket.on("message", (message) => {
-        const data = JSON.parse(message.toString());
+        try {
+            const data = JSON.parse(message.toString());
 
-        if (data.type === "join") {
-            socket.send(content);
-            return;
-        }
+            if (data.type === "join") {
+                send(socket, { type: "init", content, revision });
+                return;
+            }
 
-        if (data.type === "update") {
-            content = data.content;
-            console.log(content);
-            broadcast(content);
-            return;
+            if (data.type === "update") {
+                // reject if revision not matched
+                if (data.baseRevision !== revision) {
+                    send(socket, { tpye: "resync", content, revision });
+                    return;
+                }
+
+                // accept otherwise
+                content = data.content;
+                revision++;
+                console.log(data);
+
+                broadcast({ type: "snapshot", content, revision });
+            }
+        } catch {
+            send(socket, { type: "error", message: "Failed to sync"});
         }
     })
     

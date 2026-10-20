@@ -2,25 +2,23 @@
 
 import { useState, useEffect, useRef } from "react";
 
+type ServerMessage = {
+  type: "init" | "snapshot" | "resync";
+  content: string;
+  revision: number;
+};
+
+type ErrorMessage = {
+  type: "error";
+  message: string;
+}
+
 export default function Home() {
   const [content, setContent] = useState("");
   const [status, setStatus] = useState("Connecting");
 
   const socketRef = useRef<WebSocket | null>(null);
-
-  function handleChange(value: string) {
-    setContent(value);
-
-    const socket = socketRef.current;
-    if (socket) {
-      socket.send(
-        JSON.stringify({
-          type: "update",
-          content: value
-        })
-      );
-    }
-  }
+  const revisionRef = useRef(0);
 
   useEffect(() => {
     const socket = new WebSocket("ws://localhost:3001");
@@ -38,8 +36,22 @@ export default function Home() {
 
     socket.onmessage = (event) => {
       console.log(event);
-      const message = event.data;
-      setContent(message);
+      const message = JSON.parse(event.data) as
+        | ServerMessage
+        | ErrorMessage;
+
+      if (
+        message.type === "init" ||
+        message.type === "snapshot" ||
+        message.type === "resync"
+      ) {
+        setContent(message.content);
+        revisionRef.current = message.revision;
+      }
+
+      if (message.type === "error") {
+        setStatus(`Error: ${message.message}`);
+      }
     }
 
     socket.onclose = () => setStatus("Disconnected");
@@ -50,6 +62,21 @@ export default function Home() {
       socketRef.current = null;
     };
   }, []);
+
+  function handleChange(value: string) {
+    setContent(value);
+
+    const socket = socketRef.current;
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(
+        JSON.stringify({
+          type: "update",
+          content: value,
+          baseRevision: revisionRef.current,
+        })
+      );
+    }
+  }
 
   return (
     <main style={{
