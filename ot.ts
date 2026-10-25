@@ -51,6 +51,23 @@ export function transformOperation(
         // Against another insertion
         const insertedLength = against.text.length;
 
+        if (operation.type === "insert") {
+            if (operation.pos > against.pos) {
+                return { ...operation, pos: operation.pos+insertedLength };
+            }
+
+            if (operation.pos < against.pos) {
+                return operation;
+            }
+
+            const operationComesFirst = operation.text.localeCompare(against.text) < 0;
+            return {
+                ...operation,
+                pos: operationComesFirst ? operation.pos : operation.pos + insertedLength
+            }
+        }
+
+        // delete
         if (operation.pos >= against.pos) {
             return { ...operation, pos: operation.pos+insertedLength };
         }
